@@ -1,0 +1,48 @@
+# Fly.io deployment for the Writing Checker server.
+#
+# Frankfurt is the closest region to Turkiye with a full Fly presence, so it is
+# the shortest round trip for the first users. Change `primary_region` if the
+# audience moves.
+
+app = "writing-checker-api"
+primary_region = "fra"
+
+[build]
+
+[env]
+  PORT = "8080"
+  # Must point inside the mounted volume: anything else disappears on deploy,
+  # and with it every credit balance the users paid for.
+  DATABASE_PATH = "/data/app.db"
+
+# SQLite lives on one disk, so this app runs as exactly one machine. Fly will
+# refuse to scale past the volume count, which is the correct behaviour here -
+# two machines with two disks would be two different sets of balances.
+[[mounts]]
+  source = "writing_checker_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  # Never sleep. A paying user should not wait on a cold boot, and a suspended
+  # machine cannot answer a store purchase webhook.
+  auto_stop_machines = "off"
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 60
+    hard_limit = 120
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "writing-checker-web",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": ["run", "-d", "web-server", "--web-port", "5123", "--web-hostname", "127.0.0.1"],
+      "port": 5123,
+      "url": "http://127.0.0.1:5123"
+    }
+  ]
+}

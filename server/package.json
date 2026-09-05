@@ -1,0 +1,30 @@
+{
+  "name": "writing-checker-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Credit-metered proxy between the Writing Checker app and the Anthropic API.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --no-warnings test/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.3",
+    "jose": "^6.2.10",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
