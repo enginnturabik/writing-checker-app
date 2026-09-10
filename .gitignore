@@ -57,3 +57,9 @@ server/data/
 
 # Local launcher helpers write nothing tracked
 *.output
+
+# Android upload key. Losing this means never updating the app again, and
+# leaking it means someone else can ship as you.
+android/key.properties
+*.jks
+*.keystore

@@ -660,6 +660,39 @@ class AppState extends ChangeNotifier {
     await _store.writeHistory(_history);
   }
 
+  /// Deletes the account on the server and wipes what is on this device.
+  ///
+  /// The server keeps its financial records but drops the email and releases
+  /// the install id, so the fresh registration that follows is genuinely a new
+  /// account rather than the old one handed back.
+  Future<bool> deleteAccount() async {
+    final token = _account?.token;
+    if (token == null) return false;
+
+    try {
+      await _backend.deleteAccount(token);
+    } on ApiException catch (e) {
+      _error = e.message;
+      notifyListeners();
+      return false;
+    }
+
+    await _store.clearSessionToken();
+    _account = null;
+
+    // Saved checks never left the phone, so they are ours to clear.
+    _history = [];
+    await _store.writeHistory(_history);
+
+    // A new install id: the old one now belongs to a deleted account.
+    _installId = const Uuid().v4();
+    await _persistSettings();
+
+    notifyListeners();
+    await connect();
+    return true;
+  }
+
   Future<void> clearHistory() async {
     _history = [];
     notifyListeners();

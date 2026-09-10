@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -5,7 +7,7 @@ import { IdentityError, verifyIdentity } from "../auth/providers.ts";
 import { issueToken, registerDevice } from "../auth.ts";
 import { PLANS, PRODUCTS, TIERS, planByProduct, productById } from "../catalog.ts";
 import { balanceOf, grant } from "../credits.ts";
-import { db, now } from "../db.ts";
+import { db, now, transaction } from "../db.ts";
 import { env } from "../env.ts";
 import { identityOfUser, linkIdentity } from "../identities.ts";
 import {
@@ -259,4 +261,37 @@ accountRoutes.post("/subscriptions", async (c) => {
     granted,
     entitlement: entitlementOf(user.id),
   });
+});
+
+/**
+ * Deletes the account, which both stores require an app with sign-in to offer
+ * from inside the app.
+ *
+ * What goes and what stays is deliberate:
+ *
+ * - **Identities are hard-deleted.** The email address is the only real
+ *   personal data here, so it has to actually disappear.
+ * - **The install id is scrambled.** It identified a device, and clearing it
+ *   also means the same phone registering again gets a fresh account rather
+ *   than being handed the deleted one.
+ * - **Purchase tokens stay.** The unique index on them is what stops a receipt
+ *   being replayed to mint credits on a new account. They name a transaction,
+ *   not a person, and deleting them would open a real fraud hole.
+ * - **Ledger rows stay** as the financial record, now attached to a row that
+ *   carries nothing identifying.
+ *
+ * The row itself is kept rather than dropped so the foreign keys above still
+ * resolve; `deleted_at` marks it and `blocked` stops it being used again.
+ */
+accountRoutes.delete("/me", async (c) => {
+  const user = c.get("user");
+
+  transaction(() => {
+    db.prepare("DELETE FROM identities WHERE user_id = ?").run(user.id);
+    db.prepare(
+      "UPDATE users SET deleted_at = ?, blocked = 1, install_id = ? WHERE id = ?",
+    ).run(now(), `deleted:${randomUUID()}`, user.id);
+  });
+
+  return c.json({ deleted: true });
 });

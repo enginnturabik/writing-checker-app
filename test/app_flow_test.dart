@@ -36,6 +36,14 @@ class FakeStore extends LocalStore {
   @override
   Future<void> writeSessionToken(String token) async => sessionToken = token;
 
+  int sessionTokenClears = 0;
+
+  @override
+  Future<void> clearSessionToken() async {
+    sessionTokenClears++;
+    sessionToken = null;
+  }
+
   @override
   Future<String?> readApiKey() async => apiKey.isEmpty ? null : apiKey;
 
@@ -129,6 +137,13 @@ class FakeBackend extends BackendClient {
   Entitlement entitlement = Entitlement.free;
   ApiException? failWith;
   int checksRun = 0;
+  int deleteCalls = 0;
+
+  @override
+  Future<void> deleteAccount(String token) async {
+    deleteCalls++;
+    balance = 0;
+  }
   String? lastTierId;
 
   Account _account() => Account(
@@ -628,6 +643,64 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(state.themeMode, ThemeMode.dark);
+    });
+  });
+
+  group('deleting an account', () {
+    FakeStore meteredStore() => FakeStore(
+          settings: {'native_language': 'tr', 'learning_language': 'fr'},
+        );
+
+    testWidgets('is offered in settings, as both stores require',
+        (tester) async {
+      await _pump(tester, store: meteredStore(), backend: FakeBackend());
+
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete my account'), findsOneWidget);
+    });
+
+    testWidgets('asks first and does nothing when kept', (tester) async {
+      final backend = FakeBackend(balance: 7);
+      await _pump(tester, store: meteredStore(), backend: backend);
+
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete my account'));
+      await tester.pumpAndSettle();
+
+      // The warning has to name what is actually lost.
+      expect(find.textContaining('7 remaining credits'), findsOneWidget);
+
+      await tester.tap(find.text('Keep my account'));
+      await tester.pumpAndSettle();
+
+      expect(backend.deleteCalls, 0, reason: 'nothing was deleted');
+    });
+
+    testWidgets('deletes and clears the saved checks', (tester) async {
+      final backend = FakeBackend(balance: 7);
+      final store = meteredStore();
+      final state = await _pump(tester, store: store, backend: backend);
+
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete my account'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(backend.deleteCalls, 1);
+      expect(state.history, isEmpty, reason: 'saved checks go with it');
+      expect(
+        store.sessionTokenClears,
+        1,
+        reason: 'the old token is a credential for an account that is gone',
+      );
+      // A fresh registration follows, so the app is usable straight away
+      // rather than stranded without an account.
+      expect(state.account, isNotNull);
     });
   });
 

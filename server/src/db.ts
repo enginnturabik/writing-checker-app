@@ -137,6 +137,9 @@ export function migrate(database: DatabaseSync = db): void {
   if (!columns.some((c) => c.name === "merged_into")) {
     database.exec("ALTER TABLE users ADD COLUMN merged_into TEXT");
   }
+  if (!columns.some((c) => c.name === "deleted_at")) {
+    database.exec("ALTER TABLE users ADD COLUMN deleted_at INTEGER");
+  }
 }
 
 /**

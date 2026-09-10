@@ -174,6 +174,22 @@ class BackendClient {
     );
   }
 
+  /// Deletes the account on the server. Both stores require an app with
+  /// sign-in to offer this from inside the app, not only on a website.
+  Future<void> deleteAccount(String token) async {
+    final http.Response response;
+    try {
+      response = await _http
+          .delete(_uri('/me'), headers: _headers(token))
+          .timeout(const Duration(seconds: 30));
+    } catch (_) {
+      throw ApiException('Could not reach the server. Check your connection.');
+    }
+    if (response.statusCode != 200) {
+      throw _errorFor(response.statusCode, response.body);
+    }
+  }
+
   /// Sends a verified store purchase for crediting. Idempotent server-side, so
   /// retrying after a dropped connection is safe.
   Future<PurchaseResult> submitPurchase({

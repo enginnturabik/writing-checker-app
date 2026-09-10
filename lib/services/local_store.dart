@@ -106,6 +106,13 @@ class LocalStore {
     } catch (_) {}
   }
 
+  /// Forgets the device token, so the next launch registers as a new device.
+  Future<void> clearSessionToken() async {
+    try {
+      await _secure.delete(key: _keySessionToken);
+    } catch (_) {}
+  }
+
   // --- Settings ------------------------------------------------------------
 
   Future<Map<String, dynamic>> readSettings() async {

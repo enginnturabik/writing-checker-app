@@ -233,3 +233,83 @@ describe("reinstalling", () => {
     );
   });
 });
+
+describe("deleting an account", () => {
+  const del = (token: string) =>
+    app.request("/v1/me", {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+  it("removes the email but keeps the device unable to reuse the account", async () => {
+    const device = await register();
+    const subject = `user-${randomUUID()}`;
+    await signIn(device.token, subject, "gone@mail.com");
+
+    const response = await del(device.token);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).deleted, true);
+
+    // The token no longer addresses a usable account.
+    const after = await app.request("/v1/me", {
+      headers: { authorization: `Bearer ${device.token}` },
+    });
+    assert.notEqual(after.status, 200, "a deleted account cannot be used");
+  });
+
+  it("gives the same device a brand new account afterwards", async () => {
+    const device = await register();
+    await buy(device.token, "credits_40");
+    await del(device.token);
+
+    const again = await register(device.installId);
+
+    assert.equal(
+      again.balance,
+      3,
+      "a fresh trial, not the 15 credits the deleted account held",
+    );
+  });
+
+  it("does not let a deleted account be recovered by signing in again", async () => {
+    const device = await register();
+    const subject = `user-${randomUUID()}`;
+    await signIn(device.token, subject);
+    await buy(device.token, "credits_120");
+    await del(device.token);
+
+    // Same identity, new device: the old balance must not come back.
+    const fresh = await register();
+    const body = await (await signIn(fresh.token, subject)).json();
+
+    assert.equal(body.balance, 3, "the deleted balance stays deleted");
+  });
+
+  it("keeps a spent purchase token from being credited twice", async () => {
+    const device = await register();
+    const token = `play-${randomUUID()}`;
+    await post(device.token, "/v1/purchases", {
+      platform: "android",
+      productId: "credits_40",
+      token,
+    });
+    await del(device.token);
+
+    // The same receipt, replayed on a new account after deletion.
+    const fresh = await register();
+    const replay = await post(fresh.token, "/v1/purchases", {
+      platform: "android",
+      productId: "credits_40",
+      token,
+    });
+    const body = await replay.json();
+
+    assert.equal(body.credited, 0, "the receipt was already used");
+    assert.equal(body.balance, 3, "no credits minted from a dead receipt");
+  });
+
+  it("refuses an unauthenticated delete", async () => {
+    const response = await app.request("/v1/me", { method: "DELETE" });
+    assert.equal(response.status, 401);
+  });
+});
